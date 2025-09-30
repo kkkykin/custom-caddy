@@ -1,0 +1,172 @@
+name: Build Custom Caddy
+
+on:
+  workflow_dispatch:
+    inputs:
+      caddy_version:
+        description: 'Caddy version to build'
+        required: false
+        default: 'latest'
+        type: string
+      tag_name:
+        description: 'Release tag name (default: caddy_version-YYYY-MM-DD-HHMMSS)'
+        required: false
+        default: ''
+        type: string
+      release_name:
+        description: 'Release name'
+        required: false
+        default: 'Custom Caddy Build'
+        type: string
+
+env:
+  # 在这里添加你需要的 Caddy 模块
+  CADDY_MODULES: |
+    github.com/caddyserver/forwardproxy=github.com/klzgrad/forwardproxy@naive
+    github.com/caddyserver/replace-response
+    github.com/caddy-dns/cloudflare
+    github.com/mholt/caddy-webdav
+    github.com/mholt/caddy-l4
+    github.com/abiosoft/caddy-exec
+    github.com/abiosoft/caddy-json-parse
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.set_tag.outputs.tag_name }}
+      caddy_version: ${{ steps.set_version.outputs.caddy_version }}
+    steps:
+      - name: Set Caddy version
+        id: set_version
+        run: |
+          if [ "${{ github.event.inputs.caddy_version }}" = "latest" ]; then
+            # 获取最新版本
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r .tag_name)
+            echo "caddy_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "caddy_version=${{ github.event.inputs.caddy_version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set tag name
+        id: set_tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "tag_name=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            TIMESTAMP=$(date +'%Y-%m-%d-%H%M%S')
+            echo "tag_name=${{ steps.set_version.outputs.caddy_version }}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Install xcaddy
+      run: |
+        go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+
+    - name: Build Caddy
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CADDY_VERSION: ${{ needs.prepare.outputs.caddy_version }}
+      run: |
+        MODULE_ARGS=""
+        while IFS= read -r module; do
+          [[ -n "$module" ]] && MODULE_ARGS="$MODULE_ARGS --with $module"
+        done <<< "$CADDY_MODULES"
+
+        OUTPUT_NAME="caddy-${{ matrix.goos }}-${{ matrix.goarch }}"
+        [[ "${{ matrix.goos }}" == "windows" ]] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+
+        xcaddy build "$CADDY_VERSION" $MODULE_ARGS --output "./$OUTPUT_NAME"
+
+        # 仅当 runner 架构与目标架构一致时才执行
+        if [[ "${{ matrix.goos }}" == "linux" && "${{ matrix.goarch }}" == "amd64" ]]; then
+          chmod +x "./$OUTPUT_NAME"
+          "./$OUTPUT_NAME" version
+        else
+          file "./$OUTPUT_NAME" || true
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: caddy-${{ matrix.goos }}-${{ matrix.goarch }}*
+        compression-level: 0
+        overwrite: true  
+
+  release:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ needs.prepare.outputs.tag_name }}
+        release_name: ${{ github.event.inputs.release_name }} ${{ needs.prepare.outputs.tag_name }}
+        draft: false
+        prerelease: false
+        body: |
+          Custom Caddy build with the following modules:
+          
+          ${{ env.CADDY_MODULES }}
+          
+          **Caddy Version**: ${{ needs.prepare.outputs.caddy_version }}
+          
+          ## Downloads
+          - **Linux AMD64**: `caddy-linux-amd64`
+          - **Linux ARM64**: `caddy-linux-arm64`
+          - **macOS AMD64**: `caddy-darwin-amd64`
+          - **macOS ARM64**: `caddy-darwin-arm64`
+          - **Windows AMD64**: `caddy-windows-amd64.exe`
+
+    - name: Upload Release Assets
+      run: |
+        for dir in artifacts/*/; do
+          if [ -d "$dir" ]; then
+            artifact_name=$(basename "$dir")
+            file_path=$(find "$dir" -type f -name "caddy*" | head -1)
+            if [ -n "$file_path" ]; then
+              echo "Uploading $artifact_name from $file_path"
+              gh release upload "${{ needs.prepare.outputs.tag_name }}" "$file_path" --clobber --repo "${{ github.repository }}"
+            fi
+          fi
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
