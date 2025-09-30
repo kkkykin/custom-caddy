@@ -113,7 +113,7 @@ jobs:
           [[ -n "$module" ]] && MODULE_ARGS="$MODULE_ARGS --with $module"
         done <<< "$CADDY_MODULES"
 
-        OUTPUT_NAME="caddy-${{ matrix.goos }}-${{ matrix.goarch }}"
+        OUTPUT_NAME="caddy"
         [[ "${{ matrix.goos }}" == "windows" ]] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
 
         xcaddy build "$CADDY_VERSION" $MODULE_ARGS --output "./$OUTPUT_NAME"
@@ -130,7 +130,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: caddy-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: caddy-${{ matrix.goos }}-${{ matrix.goarch }}*
+        path: caddy*
         compression-level: 0
         overwrite: true  
 
@@ -168,7 +168,7 @@ jobs:
           - **Linux ARM64**: `caddy-linux-arm64.tar.gz`
           - **macOS AMD64**: `caddy-darwin-amd64.tar.gz`
           - **macOS ARM64**: `caddy-darwin-arm64.tar.gz`
-          - **Windows AMD64**: `caddy-windows-amd64.zip`
+          - **Windows AMD64**: `caddy-windows-amd64.tar.gz`
 
     - name: Compress artifacts
       run: |
@@ -178,15 +178,8 @@ jobs:
             artifact_name=$(basename "$dir")
             file_path=$(find "$dir" -type f -name "caddy*" | head -1)
             if [ -n "$file_path" ]; then
-              case "$artifact_name" in
-                *windows*)
-                  zip -j "release-assets/${artifact_name}.zip" "$file_path"
-                  ;;
-                *)
-                  base_name=$(basename "$file_path")
-                  tar -czf "release-assets/${artifact_name}.tar.gz" -C "$dir" "$base_name"
-                  ;;
-              esac
+              base_name=$(basename "$file_path")
+              tar -czf "release-assets/${artifact_name}.tar.gz" -C "$dir" "$base_name"
             fi
           fi
         done
