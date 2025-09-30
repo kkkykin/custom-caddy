@@ -168,7 +168,7 @@ jobs:
           - **Linux ARM64**: `caddy-linux-arm64.tar.gz`
           - **macOS AMD64**: `caddy-darwin-amd64.tar.gz`
           - **macOS ARM64**: `caddy-darwin-arm64.tar.gz`
-          - **Windows AMD64**: `caddy-windows-amd64.zip`
+          - **Windows AMD64**: `caddy-windows-amd64.tar.gz`
 
     - name: Compress artifacts
       run: |
@@ -178,15 +178,7 @@ jobs:
             artifact_name=$(basename "$dir")
             file_path=$(find "$dir" -type f -name "caddy*" | head -1)
             if [ -n "$file_path" ]; then
-              case "$artifact_name" in
-                *windows*)
-                  zip -j "release-assets/${artifact_name}.zip" "$file_path"
-                  ;;
-                *)
-                  base_name=$(basename "$file_path")
-                  tar -czf "release-assets/${artifact_name}.tar.gz" -C "$dir" "$base_name"
-                  ;;
-              esac
+              tar -czf "release-assets/${artifact_name}.tar.gz" -C "$dir" "$base_name"
             fi
           fi
         done
