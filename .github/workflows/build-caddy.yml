@@ -19,6 +19,9 @@ on:
         default: 'Custom Caddy Build'
         type: string
 
+  schedule:
+    - cron: '0 0 * * 0'
+
 env:
   # 在这里添加你需要的 Caddy 模块
   CADDY_MODULES: |
@@ -36,16 +39,18 @@ jobs:
     outputs:
       tag_name: ${{ steps.set_tag.outputs.tag_name }}
       caddy_version: ${{ steps.set_version.outputs.caddy_version }}
+      release_name: ${{ steps.set_release_name.outputs.release_name }}
     steps:
       - name: Set Caddy version
         id: set_version
         run: |
-          if [ "${{ github.event.inputs.caddy_version }}" = "latest" ]; then
+          INPUT_VERSION="${{ github.event.inputs.caddy_version }}"
+          if [ -z "$INPUT_VERSION" ] || [ "$INPUT_VERSION" = "latest" ]; then
             # 获取最新版本
             LATEST_VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r .tag_name)
             echo "caddy_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
           else
-            echo "caddy_version=${{ github.event.inputs.caddy_version }}" >> $GITHUB_OUTPUT
+            echo "caddy_version=${INPUT_VERSION}" >> $GITHUB_OUTPUT
           fi
 
       - name: Set tag name
@@ -56,6 +61,15 @@ jobs:
           else
             TIMESTAMP=$(date +'%Y-%m-%d-%H%M%S')
             echo "tag_name=${{ steps.set_version.outputs.caddy_version }}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set release name
+        id: set_release_name
+        run: |
+          if [ -n "${{ github.event.inputs.release_name }}" ]; then
+            echo "release_name=${{ github.event.inputs.release_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "release_name=Custom Caddy Build" >> $GITHUB_OUTPUT
           fi
 
   build:
@@ -139,7 +153,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ needs.prepare.outputs.tag_name }}
-        release_name: ${{ github.event.inputs.release_name }} ${{ needs.prepare.outputs.tag_name }}
+        release_name: ${{ needs.prepare.outputs.release_name }} ${{ needs.prepare.outputs.tag_name }}
         draft: false
         prerelease: false
         body: |
@@ -150,22 +164,38 @@ jobs:
           **Caddy Version**: ${{ needs.prepare.outputs.caddy_version }}
           
           ## Downloads
-          - **Linux AMD64**: `caddy-linux-amd64`
-          - **Linux ARM64**: `caddy-linux-arm64`
-          - **macOS AMD64**: `caddy-darwin-amd64`
-          - **macOS ARM64**: `caddy-darwin-arm64`
-          - **Windows AMD64**: `caddy-windows-amd64.exe`
+          - **Linux AMD64**: `caddy-linux-amd64.tar.gz`
+          - **Linux ARM64**: `caddy-linux-arm64.tar.gz`
+          - **macOS AMD64**: `caddy-darwin-amd64.tar.gz`
+          - **macOS ARM64**: `caddy-darwin-arm64.tar.gz`
+          - **Windows AMD64**: `caddy-windows-amd64.zip`
 
-    - name: Upload Release Assets
+    - name: Compress artifacts
       run: |
+        mkdir -p release-assets
         for dir in artifacts/*/; do
           if [ -d "$dir" ]; then
             artifact_name=$(basename "$dir")
             file_path=$(find "$dir" -type f -name "caddy*" | head -1)
             if [ -n "$file_path" ]; then
-              echo "Uploading $artifact_name from $file_path"
-              gh release upload "${{ needs.prepare.outputs.tag_name }}" "$file_path" --clobber --repo "${{ github.repository }}"
+              case "$artifact_name" in
+                *windows*)
+                  zip -j "release-assets/${artifact_name}.zip" "$file_path"
+                  ;;
+                *)
+                  base_name=$(basename "$file_path")
+                  tar -czf "release-assets/${artifact_name}.tar.gz" -C "$dir" "$base_name"
+                  ;;
+              esac
             fi
+          fi
+        done
+    - name: Upload Release Assets
+      run: |
+        for file in release-assets/*; do
+          if [ -f "$file" ]; then
+            echo "Uploading $(basename "$file")"
+            gh release upload "${{ needs.prepare.outputs.tag_name }}" "$file" --clobber --repo "${{ github.repository }}"
           fi
         done
       env:
