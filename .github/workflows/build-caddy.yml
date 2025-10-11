@@ -32,6 +32,7 @@ env:
     github.com/mholt/caddy-l4
     github.com/abiosoft/caddy-exec=github.com/kkkykin/caddy-exec@payload
     github.com/abiosoft/caddy-json-parse
+    github.com/kkkykin/caddy-aria2
 
 jobs:
   prepare:
