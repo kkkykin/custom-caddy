@@ -25,7 +25,7 @@ on:
 env:
   # 在这里添加你需要的 Caddy 模块
   CADDY_MODULES: |
-    github.com/caddyserver/forwardproxy=github.com/klzgrad/forwardproxy@naive
+    github.com/caddyserver/forwardproxy
     github.com/caddyserver/replace-response
     github.com/caddy-dns/cloudflare
     github.com/mholt/caddy-webdav
