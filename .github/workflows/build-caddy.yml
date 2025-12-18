@@ -33,6 +33,8 @@ env:
     github.com/abiosoft/caddy-exec=github.com/kkkykin/caddy-exec@payload
     github.com/abiosoft/caddy-json-parse
     github.com/kkkykin/caddy-aria2
+    github.com/corazawaf/coraza-caddy
+    github.com/mholt/caddy-ratelimit
 
 jobs:
   prepare:
