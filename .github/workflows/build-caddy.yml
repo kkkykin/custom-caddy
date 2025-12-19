@@ -35,6 +35,7 @@ env:
     github.com/kkkykin/caddy-aria2
     github.com/corazawaf/coraza-caddy
     github.com/mholt/caddy-ratelimit
+    github.com/kkkykin/caddy-random
 
 jobs:
   prepare:
