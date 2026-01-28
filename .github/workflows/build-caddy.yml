@@ -37,7 +37,7 @@ env:
     github.com/mholt/caddy-ratelimit
     github.com/kkkykin/caddy-random
     github.com/Javex/caddy-fail2ban
-    github.com/shift72/caddy-geo-ip
+    github.com/monobilisim/caddy-ip-list
 
 jobs:
   prepare:
