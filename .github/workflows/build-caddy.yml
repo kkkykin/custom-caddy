@@ -23,18 +23,21 @@ on:
     - cron: '0 0 * * 0'
 
 env:
-  # 在这里添加你需要的 Caddy 模块
-  CADDY_MODULES: |
-    github.com/caddyserver/replace-response
-    github.com/caddy-dns/cloudflare
-    github.com/mholt/caddy-l4
-    github.com/abiosoft/caddy-exec=github.com/kkkykin/caddy-exec@payload
-    github.com/abiosoft/caddy-json-parse=github.com/kkkykin/caddy-json-parse@mutation
-    github.com/corazawaf/coraza-caddy
-    github.com/mholt/caddy-ratelimit
-    github.com/kkkykin/caddy-random
-    github.com/kkkykin/caddy-llm-privacy-filter
-    github.com/Javex/caddy-fail2ban
+  # 在这里添加你需要的 xcaddy 参数
+  XCADDY_ARGS: |
+    --with github.com/caddyserver/replace-response
+    --with github.com/caddy-dns/cloudflare
+    --with github.com/mholt/caddy-l4
+    --with github.com/abiosoft/caddy-exec=github.com/kkkykin/caddy-exec@payload
+    --with github.com/abiosoft/caddy-json-parse=github.com/kkkykin/caddy-json-parse@mutation
+    --with github.com/corazawaf/coraza-caddy
+    --with github.com/mholt/caddy-ratelimit
+    --with github.com/kkkykin/caddy-random
+
+    --with github.com/kkkykin/caddy-llm-privacy-filter
+    --replace privacyfilter=github.com/packyme/privacy-filter@v0.0.0-20260529054237-a760b336729c
+
+    --with github.com/Javex/caddy-fail2ban
 # git.gorbe.io/caddy/geoip
 # github.com/monobilisim/caddy-ip-list
 # github.com/tuzzmaniandevil/caddy-dynamic-clientip
@@ -114,15 +117,16 @@ jobs:
         GOARCH: ${{ matrix.goarch }}
         CADDY_VERSION: ${{ needs.prepare.outputs.caddy_version }}
       run: |
-        MODULE_ARGS=""
-        while IFS= read -r module; do
-          [[ -n "$module" ]] && MODULE_ARGS="$MODULE_ARGS --with $module"
-        done <<< "$CADDY_MODULES"
+        BUILD_ARGS=()
+        while read -r flag value; do
+          [[ -z "$flag" || "$flag" == \#* ]] && continue
+          BUILD_ARGS+=("$flag" "$value")
+        done <<< "$XCADDY_ARGS"
 
         OUTPUT_NAME="caddy"
         [[ "${{ matrix.goos }}" == "windows" ]] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
 
-        xcaddy build "$CADDY_VERSION" $MODULE_ARGS --output "./$OUTPUT_NAME"
+        xcaddy build "$CADDY_VERSION" "${BUILD_ARGS[@]}" --output "./$OUTPUT_NAME"
 
         # 仅当 runner 架构与目标架构一致时才执行
         if [[ "${{ matrix.goos }}" == "linux" && "${{ matrix.goarch }}" == "amd64" ]]; then
@@ -165,7 +169,7 @@ jobs:
         body: |
           Custom Caddy build with the following modules:
           
-          ${{ env.CADDY_MODULES }}
+          ${{ env.XCADDY_ARGS }}
           
           **Caddy Version**: ${{ needs.prepare.outputs.caddy_version }}
           
