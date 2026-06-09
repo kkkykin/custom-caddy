@@ -36,6 +36,7 @@ env:
     github.com/corazawaf/coraza-caddy
     github.com/mholt/caddy-ratelimit
     github.com/kkkykin/caddy-random
+    github.com/kkkykin/caddy-llm-privacy-filter
     github.com/Javex/caddy-fail2ban
 # git.gorbe.io/caddy/geoip
 # github.com/monobilisim/caddy-ip-list
