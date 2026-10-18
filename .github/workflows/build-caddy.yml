@@ -33,10 +33,6 @@ env:
     --with github.com/corazawaf/coraza-caddy
     --with github.com/mholt/caddy-ratelimit
     --with github.com/kkkykin/caddy-random
-
-    --with github.com/kkkykin/caddy-llm-privacy-filter
-    --replace privacyfilter=github.com/packyme/privacy-filter@v0.0.0-20260529054237-a760b336729c
-
     --with github.com/Javex/caddy-fail2ban
 # git.gorbe.io/caddy/geoip
 # github.com/monobilisim/caddy-ip-list
@@ -105,7 +101,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25.x'
+        go-version: '1.26.x'
 
     - name: Install xcaddy
       run: |
